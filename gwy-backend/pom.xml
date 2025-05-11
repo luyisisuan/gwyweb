@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<!-- 保持你的 Spring Boot 版本 -->
+		<version>3.4.4</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
+	<groupId>com.example</groupId>
+	<artifactId>gwy-backend</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>gwy-backend</name>
+	<description>Demo project for Spring Boot</description>
+	<!-- <url/> 可以删除或填写你的项目 URL -->
+	<!-- <licenses> ... </licenses> 可以删除或填写 -->
+	<!-- <developers> ... </developers> 可以删除或填写 -->
+	<!-- <scm> ... </scm> 可以删除或填写 -->
+
+	<properties>
+		<!-- 保持你的 Java 版本 -->
+		<java.version>17</java.version>
+	</properties>
+
+	<dependencies>
+		<!-- Spring Boot Starter Data JPA: 核心依赖，包含 JPA API, Hibernate 实现, Spring Data JPA -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+
+		<!-- Spring Boot Starter Web: 如果是 Web 应用则需要 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+
+		<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-validation</artifactId>
+</dependency>
+
+		<!-- Apache Commons IO (根据你的需要保留) -->
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>2.11.0</version> <!-- 或其他你需要的版本 -->
+		</dependency>
+
+		<!-- **REMOVED:** 不再需要显式添加 jakarta.persistence-api -->
+		<!-- spring-boot-starter-data-jpa 会自动引入正确版本 -->
+		<!--
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>2.2.3</version>
+        </dependency>
+        -->
+
+		<!-- MySQL Connector/J: MySQL 数据库驱动 -->
+		<dependency>
+			<groupId>com.mysql</groupId>
+			<artifactId>mysql-connector-j</artifactId>
+			<!-- 版本由 spring-boot-starter-parent 管理 -->
+			<scope>runtime</scope> <!-- 仅运行时需要 -->
+		</dependency>
+
+		<!-- Lombok: 简化代码 -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional> <!-- 标记为可选，不会传递给依赖此项目的其他项目 -->
+		</dependency>
+
+		<!-- Spring Boot Starter Security: 添加安全支持 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+		<!-- Spring Boot Starter Test: 用于测试 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope> <!-- 仅测试时需要 -->
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<!-- Maven Compiler Plugin: 配置 Java 编译器 -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<!-- 版本通常由父POM管理 -->
+				<configuration>
+					<!-- Java 版本已在 properties 中定义 -->
+					<!-- <source>${java.version}</source> -->
+					<!-- <target>${java.version}</target> -->
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+							<!-- Lombok 版本由 BOM 管理 -->
+							<version>${lombok.version}</version> <!-- 通常可以省略，如果父POM或BOM管理了 -->
+						</path>
+						<!-- 如果有其他注解处理器，也加在这里 -->
+					</annotationProcessorPaths>
+				</configuration>
+			</plugin>
+			<!-- Spring Boot Maven Plugin: 用于打包和运行 Spring Boot 应用 -->
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<!-- 版本通常由父POM管理 -->
+				<configuration>
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
+				</configuration>
+				<!-- 确保 repackage goal 存在 (通常默认包含) -->
+				<executions>
+					<execution>
+						<goals>
+							<goal>repackage</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
+<!--完美！所有的命令都显示 Query OK，这表示：
+你成功创建了名为 gwy_data 的数据库。
+你成功创建了名为 gwy_user 的用户，该用户只能从本地 (localhost) 连接，密码设置为 123456。
+你成功将 gwy_data 数据库的所有权限授予了 gwy_user。
+权限已成功刷新。-->
