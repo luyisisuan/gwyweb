@@ -1,0 +1,569 @@
+我们就专注于你项目中已经实际应用的三个设计模式：策略模式 (文件存储)、工厂模式 (笔记创建) 和 观察者模式 (学习日志添加事件)。
+以下是你可以用于课程设计报告和答辩的文档内容，以及模拟的答辩问答环节。
+软件设计课程设计报告/答辩材料
+项目名称: 备考智能驾驶舱 (前后端分离版)
+应用场景:
+本项目旨在解决个人在备考公务员考试过程中信息分散、进度难以追踪、学习效率不易评估的痛点。它提供了一个集中的 Web 平台，让用户可以：
+规划备考: 制定不同阶段的学习任务 (备考轴)。
+跟踪进度: 记录在线课程学习进度、标记任务完成情况。
+辅助学习: 使用番茄钟进行专注训练，记录学习日志。
+知识管理: 建立错题本和知识库，方便复习和查阅。
+信息记录: 随时记录备考笔记和想法。
+该系统通过可视化的界面和后台数据的持久化存储，帮助用户更有条理、更高效地进行备考。
+技术架构:
+本项目采用前后端分离架构：
+前端: Vue 3 单页应用 (SPA)，使用 Vite 构建，Vue Router 进行导航，Pinia 进行状态管理。负责用户界面展示和交互。
+后端: Spring Boot RESTful API 服务，使用 Java 语言，Spring Web 处理请求，Spring Data JPA + Hibernate 进行数据持久化，MySQL (或 PostgreSQL) 作为数据库。负责业务逻辑处理和数据存储。
+通信: 前后端通过 HTTP 协议和 JSON 格式进行数据交换。
+设计模式应用:
+为了提高系统的灵活性、可扩展性和可维护性，本项目在后端业务逻辑中显式应用了以下三种设计模式：
+1. 策略模式 (Strategy Pattern)
+应用场景: 文件存储功能。用户在错题本和知识库中可以上传图片或关联文件。未来可能需要支持不同的存储方式，例如初期使用服务器本地存储，后期可能迁移到云存储服务（如阿里云 OSS、腾讯云 COS 等）。
+解决的问题: 如何在不修改核心业务逻辑（文件上传、下载、关联实体）的情况下，灵活地切换或扩展文件存储的具体实现方式。
+实现方式:
+定义了一个 FileStorageStrategy 接口，声明了文件存储的核心操作（storeFile, loadFileAsResource, deleteFile）。
+创建了具体的策略实现类 LocalStorageStrategy，实现了 FileStorageStrategy 接口，负责将文件存储在服务器本地文件系统。
+在需要进行文件操作的 Controller (FileController) 或 Service 中，注入的是 FileStorageStrategy 接口类型，而不是具体的实现类。Spring 的依赖注入机制会根据当前的 Bean 配置（目前只有 LocalStorageStrategy 被 @Service 标记）自动注入正确的实现。
+优势:
+开闭原则: 对扩展开放（可以增加新的存储策略实现，如 OssStorageStrategy），对修改关闭（不需要修改使用存储服务的代码）。
+解耦: 将文件存储的具体算法和逻辑与使用它的业务代码（如 Controller）分离开。
+灵活性: 可以通过配置（例如 @Primary, @Qualifier 或配置文件）轻松切换不同的存储策略。
+模式结构图 (UML 类图):
+classDiagram
+    class FileController {
+        -FileStorageStrategy fileStorageStrategy
+        +uploadFile(MultipartFile, String, Long)
+        +downloadFile(String, String)
+    }
+    <<Interface>> FileStorageStrategy {
+        +storeFile(MultipartFile, String) String
+        +loadFileAsResource(String, String) Resource
+        +deleteFile(String, String) void
+        +getFilePath(String, String) Path
+    }
+    class LocalStorageStrategy {
+        -String uploadDir
+        -Path fileStorageLocation
+        +storeFile(MultipartFile, String) String
+        +loadFileAsResource(String, String) Resource
+        +deleteFile(String, String) void
+        +getFilePath(String, String) Path
+    }
+    class OssStorageStrategy {
+         <<Future Extension>>
+         +storeFile(MultipartFile, String) String
+         +loadFileAsResource(String, String) Resource
+         +deleteFile(String, String) void
+         +getFilePath(String, String) Path
+    }
+
+    FileController --> FileStorageStrategy : uses
+    LocalStorageStrategy ..|> FileStorageStrategy : implements
+    OssStorageStrategy ..|> FileStorageStrategy : implements
+Use code with caution.
+Mermaid
+主要类的设计代码:
+FileStorageStrategy.java (接口定义)
+LocalStorageStrategy.java (具体实现，展示 storeFile 方法)
+FileController.java (构造函数注入 FileStorageStrategy 和 uploadFile 方法中调用 fileStorageStrategy.storeFile)
+2. 工厂模式 (Factory Pattern - 简单工厂或工厂方法)
+应用场景: 创建笔记实体 (NoteEntry)。虽然目前笔记类型比较单一（主要通过 noteKey 区分来源），但未来可能扩展出不同结构或行为的笔记类型（如待办事项、会议纪要等）。
+解决的问题: 将创建笔记对象的具体过程封装起来，使得创建逻辑与使用逻辑分离，便于未来扩展和修改笔记的创建方式。
+实现方式:
+创建了一个 NoteFactory 类，并使用 @Component 注解使其成为 Spring Bean。
+NoteFactory 提供了一个 createNote(String noteKey, String content) 方法，负责实例化 NoteEntry 对象，并可以根据 noteKey 进行一些初始设置或返回不同子类（如果未来有的话）。
+在 NoteServiceImpl 中，注入 NoteFactory，并在 createNote 方法中调用 noteFactory.createNote(...) 来获取 NoteEntry 实例，而不是直接使用 new NoteEntry()。
+优势:
+封装创建逻辑: 将对象的创建细节隐藏在工厂内部。
+降低耦合: Service 层依赖于工厂接口（或具体工厂类），而不是具体的笔记类实现细节。
+易于扩展: 当需要添加新的笔记类型或修改创建逻辑时，只需要修改工厂类，对 Service 层的影响较小。
+模式结构图 (UML 类图):
+classDiagram
+   class NoteServiceImpl {
+       -NoteFactory noteFactory
+       +createNote(NoteEntry) NoteEntry
+   }
+   class NoteFactory {
+       +createNote(String, String) NoteEntry
+   }
+   class NoteEntry {
+       -String noteKey
+       -String content
+       ...
+   }
+   NoteServiceImpl --> NoteFactory : uses
+   NoteFactory ..> NoteEntry : creates
+Use code with caution.
+Mermaid
+主要类的设计代码:
+NoteFactory.java (核心 createNote 方法)
+NoteServiceImpl.java (构造函数注入 NoteFactory 和 createNote 方法中调用工厂的部分)
+NoteEntry.java (被创建的对象)
+3. 观察者模式 (Observer Pattern) / Spring 事件机制
+应用场景: 当核心业务操作完成时，需要通知系统中其他不直接相关的模块执行后续任务。具体场景是：当用户完成一个番茄钟工作周期，并且学习日志 (StudyLog) 成功保存到数据库后。
+解决的问题: 避免 PomodoroService（负责计时和记录日志）与可能关心此事件的其他模块（如仪表盘统计更新、成就系统、通知服务等）产生紧耦合。PomodoroService 不应该知道具体有哪些模块需要被通知。
+实现方式: 利用 Spring 框架内置的事件发布/监听机制 (基于观察者模式)：
+定义了一个事件类 StudyLogAddedEvent，继承自 ApplicationEvent，用于携带新添加的 StudyLog 对象。
+在 PomodoroServiceImpl 的 addStudyLog 方法成功保存日志后，注入 ApplicationEventPublisher 并调用其 publishEvent() 方法来发布 StudyLogAddedEvent 事件。
+创建了一个或多个监听器类（如 StudyLogEventListener），使用 @Component 标记为 Bean，并使用 @EventListener 注解标记处理特定事件的方法 (handleStudyLogAdded)。
+当事件发布时，Spring 会自动将事件推送给所有监听该事件类型的监听器方法。
+优势:
+解耦: 事件发布者 (PomodoroService) 和监听者 (StudyLogEventListener 及未来可能的其他监听者) 之间没有直接依赖。
+可扩展性: 可以轻松添加新的监听器来响应 StudyLogAddedEvent，而无需修改 PomodoroService。
+异步处理 (可选): 可以通过 @Async 注解轻松地让事件监听器在单独的线程中执行，避免阻塞主业务流程。
+模式结构图 (UML 序列图/协作图):
+sequenceDiagram
+    participant Comp as PomodoroSection.vue
+    participant Store as pomodoroStore.js
+    participant Ctrl as PomodoroController
+    participant Service as PomodoroServiceImpl
+    participant Repo as StudyLogRepository
+    participant Publisher as ApplicationEventPublisher
+    participant Listener as StudyLogEventListener
+
+    Comp->>Store: 调用 addStudyLog Action (携带数据)
+    Store->>Ctrl: 发送 POST /api/pomodoro/log 请求
+    Ctrl->>Service: 调用 addStudyLog(studyLog)
+    Service->>Repo: 调用 save(studyLog)
+    Repo-->>Service: 返回 savedLog
+    Service->>Publisher: publishEvent(new StudyLogAddedEvent(this, savedLog))
+    Publisher->>Spring EventBus: 分发事件
+    Spring EventBus->>Listener: 调用 handleStudyLogAdded(event)
+    Listener->>Listener: 执行业务逻辑 (e.g., 更新统计)
+    Listener-->>Spring EventBus: 处理完成
+    Service-->>Ctrl: 返回 savedLog
+    Ctrl-->>Store: 返回 HTTP 响应 (成功)
+    Store-->>Comp: 更新状态/返回结果
+Use code with caution.
+Mermaid
+主要类的设计代码:
+StudyLogAddedEvent.java (事件定义)
+PomodoroServiceImpl.java (注入 ApplicationEventPublisher 和 publishEvent 的调用)
+StudyLogEventListener.java ( @EventListener 注解和 handleStudyLogAdded 方法)
+模拟老师答辩现场可能的问题
+Q: 为什么选择在文件存储这里使用策略模式？难道不可以直接写一个类处理本地存储吗？
+A: 直接写一个类处理本地存储在初期是可以的。但考虑到应用的未来可扩展性，我们预见到将来可能需要将文件存储迁移到云端（如阿里云 OSS 或腾讯云 COS）以获得更好的可靠性、可扩展性和访问速度。使用策略模式，我们将文件存储的接口 (FileStorageStrategy) 和具体实现 (LocalStorageStrategy) 分离开。现在 Controller 只依赖于接口。未来如果需要添加 OSS 存储，我们只需要创建一个新的 OssStorageStrategy 实现该接口，并通过 Spring 配置切换注入的实现即可，完全不需要修改 Controller 或其他业务代码，这大大提高了系统的灵活性和可维护性，符合开闭原则。
+Q: 你的笔记创建目前看起来很简单，用工厂模式是不是有点“过度设计”？
+A: 目前阶段，笔记创建逻辑确实比较简单，直接 new NoteEntry() 也可以。但引入工厂模式主要是为未来的扩展性做准备。例如，我们以后可能会增加“待办事项笔记”、“会议纪要笔记”等不同类型的笔记，它们可能有不同的初始化属性或验证规则。使用工厂模式，可以将这些不同类型笔记的创建逻辑集中到 NoteFactory 中，NoteService 只需要告诉工厂需要创建哪种类型的笔记即可，保持了 Service 层的简洁和稳定。这体现了封装变化的设计思想。即使现在看起来简单，这种模式为未来的演进提供了良好的基础。
+Q: 观察者模式（Spring 事件）在这里的具体好处是什么？为什么不用 Service 直接调用需要更新的方法？
+A: 主要好处是解耦。PomodoroService 的核心职责是管理番茄钟逻辑和添加学习日志。它不应该关心日志添加后具体需要触发哪些后续操作（比如更新仪表盘缓存、检查成就、发通知等）。如果直接在 addStudyLog 方法里调用 DashboardService.update(), AchievementService.check() 等，PomodoroService 就会与这些模块产生强依赖关系。未来如果新增一个需要响应日志添加的模块（比如邮件提醒），就需要修改 PomodoroService 的代码。
+使用 Spring 事件机制，PomodoroService 只负责发布一个“学习日志已添加”的信号 (事件)。其他任何关心这个信号的模块（比如 StudyLogEventListener 或未来的 AchievementListener）可以独立地监听这个事件并执行自己的逻辑。这样模块之间是松耦合的，添加或移除监听者都不会影响到发布者，使得系统更容易扩展和维护。同时，还可以方便地将监听器配置为异步执行 (@Async)，避免阻塞核心的日志添加流程。
+Q: 你是如何选择这三个设计模式的？它们之间有关联吗？
+A: 我选择这三个模式是基于项目中遇到的具体问题和对未来扩展的考虑：
+策略模式解决的是算法或实现方式的可替换性问题（文件存储）。
+工厂模式解决的是对象创建过程的封装和灵活性问题（笔记创建）。
+观察者模式解决的是对象间一对多依赖关系的解耦问题（日志添加后的通知）。
+它们解决的问题域不同，在我的项目中目前没有直接的强关联，但它们共同的目标都是提高代码的灵活性、可维护性和可扩展性，使得系统不同部分的修改和演进更加容易。
+Q: 除了这三个，你的项目中还有哪些地方体现了面向对象或设计原则？
+A:
+单一职责原则: 尽量让每个类（Controller, Service, Repository, Entity）承担单一的职责。
+依赖倒置原则: 通过依赖注入（@Autowired 构造函数注入），高层模块（Controller）依赖于抽象（Service 接口），而不是具体实现。Service 依赖 Repository 接口。
+接口隔离原则 (部分体现): 定义了 Service 接口，虽然目前每个接口只有一个实现类，但为未来可能的多实现或代理提供了基础。
+封装: 将数据（Entity 字段）和操作数据的逻辑（Service 方法）进行了封装。
+准备好这些内容，并结合你对代码的熟悉程度，应该能够很好地应对老师的提问了。祝你答辩顺利！
+
+
+
+好的，我们来为你这个“备考智能驾驶舱”应用编写一份需求文档和一份简单的API 文档。这将有助于你整理项目功能、明确前后端交互，并作为课程设计报告的一部分。
+
+需求文档 - 备考智能驾驶舱
+
+1. 引言
+
+1.1 项目背景: 个人在准备公务员考试过程中，面临学习计划、进度跟踪、资料整理、错题回顾等多方面的信息管理挑战。传统方式（如纸质笔记、分散的电子文档）效率不高且难以形成整体视图。
+
+1.2 项目目标: 开发一个 Web 应用“备考智能驾驶舱”，为备考者提供一站式的信息管理和学习辅助平台，实现备考过程的结构化、可视化和持久化，提高备考效率。
+
+1.3 用户画像: 主要面向正在备考或计划备考公务员考试的学生或个人，具备基本的计算机和网络使用能力。
+
+1.4 设计原则: 简洁易用、信息直观、数据持久、可扩展性。
+
+2. 功能性需求
+
+2.1 仪表盘 (Dashboard)
+
+FR-DASH-01: 显示固定的考生基本信息（姓名、学校、专业、毕业时间、政治面貌）。
+
+FR-DASH-02: 显示备考目标（考试名称/年份）。
+
+FR-DASH-03: 显示距离预设报名日期和考试日期的倒计时天数 (需配置日期)。
+
+FR-DASH-04: 汇总显示关键进度摘要：
+
+阶段任务完成比例（已完成数 / 总任务数）。
+
+课程学习进度百分比。
+
+今日完成的番茄钟专注次数。
+
+记录的错题总数。
+
+知识库的总条目数。
+
+2.2 备考时间轴 (Timeline)
+
+FR-TIME-01: 以手风琴 (Accordion) 形式分阶段（如基础、强化、冲刺）展示备考计划。
+
+FR-TIME-02: 每个阶段显示预设的任务列表。
+
+FR-TIME-03: 用户可以勾选任务项以标记完成状态。
+
+FR-TIME-04: 任务完成状态需要持久化存储。
+
+FR-TIME-05: 每个阶段头部动态显示该阶段任务的完成进度百分比。
+
+FR-TIME-06: 点击阶段头部可以展开/折叠任务列表。
+
+2.3 课程追踪 (Course Tracker)
+
+FR-CRSE-01: 显示当前追踪的在线课程名称和链接。
+
+FR-CRSE-02: 用户可以输入并保存课程的总节数。
+
+FR-CRSE-03: 用户可以输入并保存已完成的节数。
+
+FR-CRSE-04: 系统根据总节数和已完成节数，自动计算并显示课程进度百分比及进度条。
+
+FR-CRSE-05: 提供一个笔记区域，用户可以记录与该课程相关的笔记。
+
+FR-CRSE-06: 课程进度和笔记内容需要持久化存储。
+
+2.4 番茄钟 (Pomodoro Timer)
+
+FR-POMO-01: 提供一个标准的番茄钟计时器界面。
+
+FR-POMO-02: 包含工作、短时休息、长时休息三种模式。
+
+FR-POMO-03: 用户可以启动、暂停、重置计时器。
+
+FR-POMO-04: 计时器界面应清晰显示当前模式和剩余时间。
+
+FR-POMO-05: 提供可视化进度环，直观展示当前周期的剩余时间比例。
+
+FR-POMO-06: 用户可以在设置区域修改工作、短休、长休的默认时长（分钟）。
+
+FR-POMO-07: 用户修改的时长设置需要持久化保存。
+
+FR-POMO-08: 用户可以在工作模式开始前或暂停时，输入当前专注的活动内容。
+
+FR-POMO-09: 当一个工作番茄钟周期成功完成后（非中途重置），系统应自动将该时段的学习记录（开始时间、结束时间、计算出的时长、活动内容）添加到学习日志中。
+
+FR-POMO-10: 系统应能统计并显示用户当天完成的番茄钟工作周期总数。该计数每日自动重置。
+
+2.5 错题本 (Error Log)
+
+FR-ERRL-01: 提供表单，允许用户添加新的错题记录，包含字段：题干、所属模块（下拉选择）、我的答案、正确答案、关联知识点、错误原因分析、可选的截图文件。
+
+FR-ERRL-02: 错题记录（包括文件关联信息）需要持久化存储。
+
+FR-ERRL-03: 提供错题列表展示区域。
+
+FR-ERRL-04: 列表应能按模块进行筛选。
+
+FR-ERRL-05: 每条错题记录应显示所有录入信息，并包含记录时间。
+
+FR-ERRL-06: 如果错题有关联截图，应显示文件名，并提供可点击的链接以下载或查看该截图。
+
+FR-ERRL-07: 用户可以标记某条错题为“已复习”，系统记录复习次数和最后复习时间。
+
+FR-ERRL-08: 用户可以删除某条错题记录（需要确认）。删除记录时应同时处理关联的文件（如果后端支持）。
+
+2.6 知识库 (Knowledge Base)
+
+FR-KNOW-01: 提供表单，允许用户添加新的知识条目，包含字段：标题、分类（下拉选择）、内容、标签（逗号分隔）、可选外部链接、可选关联文件。
+
+FR-KNOW-02: 知识条目（包括文件关联信息）需要持久化存储。
+
+FR-KNOW-03: 提供知识条目列表展示区域。
+
+FR-KNOW-04: 列表应能按分类进行筛选。
+
+FR-KNOW-05: 列表应能根据用户输入的关键词进行搜索（搜索范围：标题、内容、标签）。
+
+FR-KNOW-06: 每条知识条目应显示所有录入信息（标题、分类、内容、标签、链接、文件名），并包含添加时间。搜索时应对匹配的关键词进行高亮显示。
+
+FR-KNOW-07: 如果知识条目有关联文件，应显示文件名，并提供可点击的链接以下载或查看该文件。
+
+FR-KNOW-08: 用户可以删除某条知识条目（需要确认）。删除记录时应同时处理关联的文件（如果后端支持）。
+
+2.7 学习统计 (Study Log)
+
+FR-STAT-01: 显示基于已记录的学习日志（目前主要来源是完成的番茄钟）计算出的统计数据：今日、本周、本月、总计学习时长。
+
+FR-STAT-02: (已修改) 显示今日总在线活跃时长（与番茄钟学习时长分开统计，数据来自后端的每日活动记录）。
+
+FR-STAT-03: 显示最近的学习日志列表，每条记录包含活动内容、时长、开始和结束时间。列表按时间倒序排列。
+
+FR-STAT-04: 提供清空所有学习日志记录的功能（需要确认）。
+
+FR-STAT-05: 学习日志记录和统计数据需要持久化存储。
+
+2.8 备考笔记 (Notes)
+
+FR-NOTE-01: 提供一个文本区域，用于用户输入和添加通用备考笔记。
+
+FR-NOTE-02: 采用日志式记录，每次点击“添加笔记”按钮，都将当前输入框的内容作为一条新的笔记记录进行保存。
+
+FR-NOTE-03: 添加成功后，清空输入框。
+
+FR-NOTE-04: 在页面下方显示所有已保存的笔记记录列表，按创建时间倒序排列。
+
+FR-NOTE-05: 每条笔记记录应显示其内容和创建时间。
+
+FR-NOTE-06: 用户可以删除某条笔记记录（需要确认）。
+
+FR-NOTE-07: 笔记数据需要持久化存储。
+
+2.9 资源库 (Resources)
+
+FR-RSRC-01: 提供一个静态页面，展示常用的备考相关网站链接。
+
+FR-RSRC-02: 点击链接可以在新标签页打开对应网站。
+
+3. 非功能性需求
+
+3.1 性能: 页面加载和数据刷新应具有较快的响应速度。数据库查询应尽可能高效。
+
+3.2 易用性: 界面简洁直观，操作符合用户习惯。
+
+3.3 可靠性: 数据持久化存储可靠，不易丢失。后端服务稳定。
+
+3.4 可维护性: 代码结构清晰，遵循规范，易于理解和修改。前后端职责分离。
+
+3.5 安全性:
+
+对用户输入内容（特别是用于 v-html 的）进行必要的安全处理，防止 XSS 攻击。
+
+后端 API 防止 SQL 注入（通过 JPA 实现）。
+
+文件上传需要进行基本的类型和大小校验，存储路径要安全处理。
+
+(未来) 需要考虑用户认证、授权和密码安全。
+
+3.6 兼容性: 优先保证在最新版本的 Chrome, Firefox, Edge 浏览器上正常运行。考虑基本的响应式设计以适应不同屏幕尺寸。
+
+4. 数据持久化需求
+
+所有用户生成的数据（任务状态、课程进度、笔记、番茄钟设置、错题、知识条目、学习日志、每日在线时长）都需要持久化存储在后端的 MySQL 数据库中，重启应用或更换浏览器后数据不丢失。
+
+API 文档 (简化版)
+
+基础 URL: http://localhost:8080 (或部署后的后端地址)
+
+通用约定:
+
+请求体 (Request Body) 和响应体 (Response Body) 均为 JSON 格式 (文件上传除外，笔记保存/更新 PUT 请求体为 text/plain)。
+
+成功的 GET, PUT, PATCH, DELETE 通常返回 200 OK 或 204 No Content。
+
+成功的 POST 通常返回 201 Created。
+
+客户端错误（如参数错误）返回 4xx 状态码 (如 400 Bad Request, 404 Not Found)。
+
+服务器端错误返回 5xx 状态码 (如 500 Internal Server Error)。
+
+日期时间格式使用 ISO 8601 标准，并包含时区偏移（例如 2025-04-13T15:30:00.123+08:00）。
+
+API 端点:
+
+1. 时间轴任务 (Timeline Tasks) (/api/timeline/tasks)
+
+GET /grouped: 获取所有任务，按阶段分组。
+
+响应 Body: Map<String, List<TimelineTask>> (Key: "phase1", "phase2", "phase3")
+
+GET /: 获取所有任务的平铺列表，按阶段排序。
+
+响应 Body: List<TimelineTask>
+
+PATCH /{taskId}: 更新指定任务的完成状态。
+
+路径参数 taskId: String (例如 "task-phase1-1-timeline")
+
+请求 Body: {"completed": boolean}
+
+响应: 200 OK (成功) / 404 Not Found (任务不存在)
+
+2. 课程追踪 (Course Tracker) (/api/course-tracker)
+
+GET /: 获取主课程 (courseKey="main-course") 的追踪信息。如果不存在则创建默认记录并返回。
+
+响应 Body: CourseTracker
+
+PATCH /: 更新主课程的追踪信息。
+
+请求 Body: Map<String, Object> (只包含要更新的字段，如 {"completedLessons": 10, "notes": "..."})
+
+响应 Body: 更新后的 CourseTracker (200 OK) / 404 Not Found
+
+3. 番茄钟 (Pomodoro) (/api/pomodoro)
+
+GET /settings: 获取默认用户的番茄钟设置。
+
+响应 Body: PomodoroSettings
+
+PATCH /settings: 更新默认用户的番茄钟设置。
+
+请求 Body: Map<String, Integer> (只包含要更新的字段，如 {"workDuration": 30})
+
+响应 Body: 更新后的 PomodoroSettings (200 OK) / 404 Not Found
+
+POST /log: 添加一条学习日志记录。
+
+请求 Body: StudyLog 对象 (不含 ID)
+
+响应 Body: 创建后的 StudyLog 对象 (含 ID) (201 Created)
+
+GET /log/recent: 获取最近的学习日志记录。
+
+查询参数 limit (int, 可选, 默认 50): 获取的条数。
+
+响应 Body: List<StudyLog> (按开始时间倒序)
+
+DELETE /log/all: 清空所有学习日志记录。
+
+响应: 204 No Content (成功)
+
+4. 错题本 (Error Log) (/api/errors)
+
+GET /: 获取错题记录列表。
+
+查询参数 subject (String, 可选): 按科目筛选。
+
+响应 Body: List<ErrorLogEntry> (按时间戳倒序)
+
+POST /: 添加新的错题记录。
+
+请求 Body: ErrorLogEntry 对象 (不含 ID, timestamp, reviewCount, lastReviewDate；imageFile 可选，为原始文件名)
+
+响应 Body: 创建后的 ErrorLogEntry (含 ID, timestamp) (201 Created)
+
+PATCH /{id}/review: 标记指定 ID 的错题为已复习 (增加 reviewCount, 更新 lastReviewDate)。
+
+路径参数 id: Long
+
+响应 Body: 更新后的 ErrorLogEntry (200 OK) / 404 Not Found
+
+DELETE /{id}: 删除指定 ID 的错题记录 (后端应负责删除关联文件)。
+
+路径参数 id: Long
+
+响应: 204 No Content (成功) / 404 Not Found
+
+5. 知识库 (Knowledge Base) (/api/knowledge)
+
+GET /: 获取知识库条目列表。
+
+查询参数 category (String, 可选): 按分类筛选。
+
+查询参数 search (String, 可选): 按关键词搜索 (标题、内容、标签)。
+
+响应 Body: List<KnowledgeItem> (按时间戳倒序)
+
+POST /: 添加新的知识库条目。
+
+请求 Body: KnowledgeItem 对象 (不含 ID, timestamp；tags 应为数组；linkedFile 可选，为原始文件名)
+
+响应 Body: 创建后的 KnowledgeItem (含 ID, timestamp) (201 Created)
+
+DELETE /{id}: 删除指定 ID 的知识库条目 (后端应负责删除关联文件)。
+
+路径参数 id: Long
+
+响应: 204 No Content (成功) / 404 Not Found
+
+6. 笔记 (Notes - 日志式) (/api/notes)
+
+GET /: 获取所有笔记记录。
+
+响应 Body: List<NoteEntry> (按时间戳 timestamp 降序排列)
+
+POST /: 创建一条新的笔记记录。
+
+请求 Body: NoteEntry 对象 (只需包含 content 和可选 noteKey)
+
+响应 Body: 创建后的 NoteEntry (含 ID, timestamp) (201 Created)
+
+DELETE /{id}: 删除指定 ID 的笔记记录。
+
+路径参数 id: Long
+
+响应: 204 No Content (成功) / 404 Not Found
+
+7. 学习目标 (Study Goals - 基于 StudyGoal 实体) (/api/goals)
+
+GET /: 获取所有学习目标。
+
+响应 Body: List<StudyGoal>
+
+POST /: 添加新的学习目标。
+
+请求 Body: StudyGoal 对象 (只需 text, completed 通常为 false)
+
+响应 Body: 创建后的 StudyGoal (含 ID) (201 Created)
+
+PATCH /{id}/toggle: 切换指定 ID 目标的完成状态。
+
+路径参数 id: Long
+
+响应 Body: 更新后的 StudyGoal (200 OK) / 404 Not Found
+
+DELETE /{id}: 删除指定 ID 的学习目标。
+
+路径参数 id: Long
+
+响应: 204 No Content / 404 Not Found
+
+8. 文件上传/下载 (File Handling) (/api/files)
+
+POST /upload: 上传文件并关联到实体。
+
+请求类型: multipart/form-data
+
+表单参数:
+
+file: MultipartFile (文件本身)
+
+type: String ("error" 或 "knowledge")
+
+entityId: Long (关联的错题或知识条目 ID)
+
+响应 Body: {"message": "...", "fileIdentifier": "..."} (包含存储后的相对路径) (200 OK) / 400 Bad Request / 404 Not Found / 500 Internal Server Error
+
+GET /download/{subDirectory}/{filename:.+}: 下载或查看文件。
+
+路径参数 subDirectory: String (如 "errors", "knowledge")
+
+路径参数 filename: String (UUID 文件名 + 扩展名)
+
+响应: 文件流 (Content-Type 根据文件类型确定, Content-Disposition: inline) / 404 Not Found
+
+9. 每日活动/在线时长统计 (Daily Activity Log) (/api/activity)
+
+POST /ping: 前端发送心跳以增加今日在线时长。
+
+请求 Body: {"durationSeconds": long} (过去一段时间的活跃秒数)
+
+响应: 200 OK (成功) / 400 Bad Request
+
+GET /today: 获取今日总在线时长（秒）。
+
+响应 Body: {"todaySeconds": long}
+
+GET /stats: 获取聚合统计数据。
+
+响应 Body: Map<String, Long> (包含 "total", "week", "month" - 基于学习日志；"todayOnline" - 基于在线日志)
+
+GET /date/{dateString}: 获取指定日期的在线时长（秒）。
+
+路径参数 dateString: String (格式 "YYYY-MM-DD")
+
+响应 Body: {"date": "...", "seconds": long} / 400 Bad Request / 404 Not Found
+
+GET /range: 获取指定日期范围的每日在线日志。
+
+查询参数 startDate (String, "YYYY-MM-DD"), endDate (String, "YYYY-MM-DD")
+
+响应 Body: List<DailyActivityLog> / 400 Bad Request
+
+这份文档应该能比较全面地覆盖你项目的功能需求和 API 设计，希望能对你的课程设计有所帮助！
